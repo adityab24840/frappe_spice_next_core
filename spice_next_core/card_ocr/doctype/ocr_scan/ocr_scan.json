@@ -1,0 +1,126 @@
+{
+ "actions": [],
+ "creation": "2026-11-13 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "card_type",
+  "page",
+  "writer",
+  "source_image",
+  "aligned_image",
+  "status",
+  "template_version",
+  "template_sha",
+  "inliers",
+  "cells_total",
+  "cells_with_ink"
+ ],
+ "fields": [
+  {
+   "fieldname": "card_type",
+   "fieldtype": "Link",
+   "label": "Card type",
+   "options": "OCR Card Type",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "page",
+   "fieldtype": "Data",
+   "label": "Page id",
+   "reqd": 1,
+   "in_list_view": 1,
+   "description": "One id per photographed card (e.g. p-094)"
+  },
+  {
+   "fieldname": "writer",
+   "fieldtype": "Data",
+   "label": "Writer code",
+   "description": "Who filled in the card: a code like W07 or a clinic id, never a name"
+  },
+  {
+   "fieldname": "source_image",
+   "fieldtype": "Attach Image",
+   "label": "Source photo",
+   "description": "Patient data: private file"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Uploaded\nAligned\nCut\nRejected",
+   "default": "Uploaded",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "inliers",
+   "fieldtype": "Int",
+   "label": "Matching features",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cells_total",
+   "fieldtype": "Int",
+   "label": "Cells",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cells_with_ink",
+   "fieldtype": "Int",
+   "label": "Cells with ink",
+   "read_only": 1
+  },
+  {
+   "fieldname": "aligned_image",
+   "fieldtype": "Attach Image",
+   "label": "Aligned scan",
+   "read_only": 1,
+   "description": "The photo straightened onto the template. Private. Used to estimate the blank card and to re-cut cells when the grid changes."
+  },
+  {
+   "fieldname": "template_version",
+   "fieldtype": "Int",
+   "label": "Template version",
+   "read_only": 1
+  },
+  {
+   "fieldname": "template_sha",
+   "fieldtype": "Data",
+   "label": "Template image hash",
+   "read_only": 1,
+   "hidden": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 0,
+ "links": [],
+ "modified": "2026-11-13 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Card OCR",
+ "name": "OCR Scan",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "share": 1
+  },
+  {
+   "role": "OCR Labeler",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "format:SCAN-{card_type}-{page}"
+}

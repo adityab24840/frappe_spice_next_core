@@ -1,1 +1,2 @@
 Spice Next Core
+Card OCR

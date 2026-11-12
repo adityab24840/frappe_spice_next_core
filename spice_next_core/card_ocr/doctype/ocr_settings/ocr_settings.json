@@ -1,0 +1,78 @@
+{
+ "actions": [],
+ "creation": "2026-11-13 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "backend_url",
+  "backend_token",
+  "default_pretrained",
+  "min_pages",
+  "allow_ai_read"
+ ],
+ "fields": [
+  {
+   "fieldname": "backend_url",
+   "fieldtype": "Data",
+   "label": "Training backend URL",
+   "description": "e.g. http://127.0.0.1:8790 (the PyTorch service, card_ocr/backend/server.py)"
+  },
+  {
+   "fieldname": "backend_token",
+   "fieldtype": "Password",
+   "label": "Backend token",
+   "description": "The secret the backend was started with (OCR_BACKEND_TOKEN)"
+  },
+  {
+   "fieldname": "default_pretrained",
+   "fieldtype": "Data",
+   "label": "Starting weights",
+   "default": "auto",
+   "description": "auto, legacy, or a name from Studio's pretrained list"
+  },
+  {
+   "fieldname": "min_pages",
+   "fieldtype": "Int",
+   "label": "Fewest labelled pages to train",
+   "default": 10
+  },
+  {
+   "fieldname": "allow_ai_read",
+   "fieldtype": "Check",
+   "label": "Allow unverified machine reads in training",
+   "default": 0,
+   "description": "Off by default. Machine reads are guesses: a reader trained on them is scored against the same guesses, so its accuracy means little."
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-13 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Card OCR",
+ "name": "OCR Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "share": 1
+  },
+  {
+   "role": "OCR Labeler",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "istable": 0,
+ "issingle": 1
+}

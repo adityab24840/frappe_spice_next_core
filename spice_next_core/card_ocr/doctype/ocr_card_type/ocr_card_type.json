@@ -1,0 +1,172 @@
+{
+ "actions": [],
+ "creation": "2026-11-13 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "card_key",
+  "title",
+  "status",
+  "section_template",
+  "template_image",
+  "template_version",
+  "grid_json",
+  "grid_opts",
+  "layout_json",
+  "blank_image",
+  "blank_scans",
+  "section_fields",
+  "fields",
+  "section_checks",
+  "same_day_fields",
+  "increasing_fields",
+  "section_notes",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "card_key",
+   "fieldtype": "Data",
+   "label": "Card key",
+   "reqd": 1,
+   "unique": 1,
+   "description": "Short id, letters/digits/_/- (becomes the pack id)"
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nGridded\nTrained\nShipped",
+   "default": "Draft",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "section_template",
+   "fieldtype": "Section Break",
+   "label": "Template"
+  },
+  {
+   "fieldname": "template_image",
+   "fieldtype": "Attach Image",
+   "label": "Blank template",
+   "description": "Flat, straight-on blank page. Stored private."
+  },
+  {
+   "fieldname": "grid_json",
+   "fieldtype": "JSON",
+   "label": "Grid",
+   "description": "Row/column lines on the template (cardpack grid.json)"
+  },
+  {
+   "fieldname": "section_fields",
+   "fieldtype": "Section Break",
+   "label": "Fields"
+  },
+  {
+   "fieldname": "fields",
+   "fieldtype": "Table",
+   "label": "Fields",
+   "options": "OCR Field Spec"
+  },
+  {
+   "fieldname": "section_notes",
+   "fieldtype": "Section Break",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "blank_image",
+   "fieldtype": "Attach Image",
+   "label": "Blank card estimate",
+   "read_only": 1,
+   "description": "The card with nothing written on it: the pixel median of up to 25 aligned scans. Printed marks it shows are not counted as writing."
+  },
+  {
+   "fieldname": "blank_scans",
+   "fieldtype": "Int",
+   "label": "Scans in the blank estimate",
+   "read_only": 1
+  },
+  {
+   "fieldname": "layout_json",
+   "fieldtype": "JSON",
+   "label": "Template layout",
+   "hidden": 1,
+   "description": "The cells found on the template, as the template editor left them (rectangles with name and kind). The grid is derived from this."
+  },
+  {
+   "fieldname": "grid_opts",
+   "fieldtype": "JSON",
+   "label": "Grid options",
+   "hidden": 1,
+   "description": "Axis, label columns to skip, data columns to keep, heading rows to skip, rows to keep: what the saved grid was made with."
+  },
+  {
+   "fieldname": "template_version",
+   "fieldtype": "Int",
+   "label": "Template version in use",
+   "read_only": 1,
+   "description": "The newest template version that has a grid: new scans are cut with it."
+  },
+  {
+   "fieldname": "section_checks",
+   "fieldtype": "Section Break",
+   "label": "Card checks"
+  },
+  {
+   "fieldname": "same_day_fields",
+   "fieldtype": "Data",
+   "label": "Dates usually written on the same day",
+   "description": "Comma-separated field keys, for example bcg, penta, opv, pcv, ipv. In one visit, when at least two of them read the same date, a cell reading something else gets that date as a suggestion. Nothing is changed for you."
+  },
+  {
+   "fieldname": "increasing_fields",
+   "fieldtype": "Data",
+   "label": "Dates that must go up from visit to visit",
+   "description": "Comma-separated field keys, for example visit_date. A date earlier than the one before it gets a note."
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 0,
+ "links": [],
+ "modified": "2026-11-13 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Card OCR",
+ "name": "OCR Card Type",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "share": 1
+  },
+  {
+   "role": "OCR Labeler",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "field:card_key",
+ "title_field": "title"
+}

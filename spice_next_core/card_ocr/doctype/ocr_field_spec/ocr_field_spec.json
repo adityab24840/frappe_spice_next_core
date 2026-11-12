@@ -1,0 +1,80 @@
+{
+ "actions": [],
+ "creation": "2026-11-13 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "key",
+  "kind",
+  "layout",
+  "range_low",
+  "range_high",
+  "decode",
+  "status"
+ ],
+ "fields": [
+  {
+   "fieldname": "key",
+   "fieldtype": "Data",
+   "label": "Key",
+   "reqd": 1,
+   "in_list_view": 1,
+   "description": "Field name on the card, letters/digits/_ (matches the grid)"
+  },
+  {
+   "fieldname": "kind",
+   "fieldtype": "Select",
+   "label": "Kind",
+   "options": "number\ndate\nbp\nmark\ntext",
+   "reqd": 1,
+   "in_list_view": 1,
+   "default": "number"
+  },
+  {
+   "fieldname": "layout",
+   "fieldtype": "Select",
+   "label": "Layout",
+   "options": "single\nstacked\ndiagonal",
+   "default": "single",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "range_low",
+   "fieldtype": "Float",
+   "label": "Range low"
+  },
+  {
+   "fieldname": "range_high",
+   "fieldtype": "Float",
+   "label": "Range high"
+  },
+  {
+   "fieldname": "decode",
+   "fieldtype": "Select",
+   "label": "Decode",
+   "options": "greedy\ngrammar",
+   "default": "greedy"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "needs-review\nship",
+   "default": "needs-review",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-11-13 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Card OCR",
+ "name": "OCR Field Spec",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "editable_grid": 1
+}

@@ -1,0 +1,164 @@
+{
+ "actions": [],
+ "creation": "2026-11-13 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "scan",
+  "card_type",
+  "field_key",
+  "visit",
+  "has_ink",
+  "crop",
+  "section_ai",
+  "ai_text",
+  "ai_confidence",
+  "ai_source",
+  "ai_suggestion",
+  "ai_note",
+  "section_label",
+  "label",
+  "note",
+  "how",
+  "warning"
+ ],
+ "fields": [
+  {
+   "fieldname": "scan",
+   "fieldtype": "Link",
+   "label": "Scan",
+   "options": "OCR Scan",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "card_type",
+   "fieldtype": "Link",
+   "label": "Card type",
+   "options": "OCR Card Type",
+   "fetch_from": "scan.card_type",
+   "read_only": 1
+  },
+  {
+   "fieldname": "field_key",
+   "fieldtype": "Data",
+   "label": "Field",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "visit",
+   "fieldtype": "Data",
+   "label": "Visit",
+   "reqd": 1,
+   "description": "c1 = first visit"
+  },
+  {
+   "fieldname": "has_ink",
+   "fieldtype": "Check",
+   "label": "Has ink"
+  },
+  {
+   "fieldname": "crop",
+   "fieldtype": "Attach Image",
+   "label": "Cell crop"
+  },
+  {
+   "fieldname": "section_ai",
+   "fieldtype": "Section Break",
+   "label": "AI suggestion (never a label)"
+  },
+  {
+   "fieldname": "ai_text",
+   "fieldtype": "Data",
+   "label": "Suggested text",
+   "read_only": 1
+  },
+  {
+   "fieldname": "ai_confidence",
+   "fieldtype": "Float",
+   "label": "Suggestion confidence",
+   "read_only": 1
+  },
+  {
+   "fieldname": "ai_source",
+   "fieldtype": "Data",
+   "label": "Suggested by",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_label",
+   "fieldtype": "Section Break",
+   "label": "Label"
+  },
+  {
+   "fieldname": "label",
+   "fieldtype": "Data",
+   "label": "Label",
+   "in_list_view": 1,
+   "description": "What the cell says; Bangla digits stored as 0-9"
+  },
+  {
+   "fieldname": "note",
+   "fieldtype": "Select",
+   "label": "Note",
+   "options": "\nblank\nunreadable"
+  },
+  {
+   "fieldname": "how",
+   "fieldtype": "Select",
+   "label": "How labelled",
+   "options": "\ntyped\naccepted\ncorrected\nai-read\nphone",
+   "description": "ai-read = unverified machine read; never counts as ground truth"
+  },
+  {
+   "fieldname": "warning",
+   "fieldtype": "Small Text",
+   "label": "Warning",
+   "read_only": 1
+  },
+  {
+   "fieldname": "ai_suggestion",
+   "fieldtype": "Data",
+   "label": "Suggested by a card check",
+   "read_only": 1
+  },
+  {
+   "fieldname": "ai_note",
+   "fieldtype": "Small Text",
+   "label": "Card check note",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 0,
+ "links": [],
+ "modified": "2026-11-13 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Card OCR",
+ "name": "OCR Cell",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "share": 1
+  },
+  {
+   "role": "OCR Labeler",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "CELL-.#######"
+}
