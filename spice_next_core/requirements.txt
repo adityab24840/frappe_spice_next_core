@@ -1,2 +1,8 @@
 anthropic>=0.40.0
 openai>=1.0.0
+# Card OCR engine (card_ocr/engine)
+numpy>=2.0
+opencv-python-headless>=4.13,<5   # the version Card Studio runs on: SIFT and Hough results differ between major versions
+onnxruntime>=1.18
+pillow-heif>=1.0
+pypdfium2>=4.0
