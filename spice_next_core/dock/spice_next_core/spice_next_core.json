@@ -12,6 +12,14 @@
     "link_to": "Spice Next Core",
     "link_type": "Sidebar",
     "title": "Spice"
+   },
+   {
+    "added": 0,
+    "hidden": 0,
+    "icon": "scan",
+    "link_to": "Card OCR",
+    "link_type": "Sidebar",
+    "title": "Card OCR"
    }
   ],
   "mount_on": "uhis",
