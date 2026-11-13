@@ -547,3 +547,74 @@ def run_batch5():
 	for label, ok, extra in report:
 		print(("PASS " if ok else "FAIL ") + label + (f"  ({extra})" if extra != "" else ""))
 	print("RESULT:", "all passed" if all(o for _, o, _ in report) else "FAILURES")
+
+
+def run_batch6():
+	"""Pretrained models from outside, on a real database with a real model (PP-OCRv6 small, Latin and CJK only): import, score, suggest, refuse, remove.
+	Needs CARD_OCR_TEST_PPOCR=<folder with inference.onnx and inference.yml>; skipped without it.
+
+	    CARD_OCR_TEST_PPOCR=/path bench --site <site> execute spice_next_core.card_ocr.selftest.run_batch6
+	"""
+	import numpy as np
+
+	import os
+
+	folder, report, name, card_key = os.environ.get("CARD_OCR_TEST_PPOCR", ""), [], "selftest_ext", "selftest_extcard"
+	if not (folder and os.path.exists(os.path.join(folder, "inference.onnx"))):
+		print("SKIP: set CARD_OCR_TEST_PPOCR to a folder with inference.onnx and inference.yml")
+		return
+
+	def check(label, ok, extra=""):
+		report.append((label, bool(ok), extra))
+
+	onnx = open(os.path.join(folder, "inference.onnx"), "rb").read()
+	chars = open(os.path.join(folder, "inference.yml"), encoding="utf-8").read()
+	try:
+		for label, bad in (("a bad name", {"name": "no good!"}), ("a charset that does not fit the model", {"charset_text": "0\n1\n2"})):
+			try:
+				service.external_add(**{"name": name, "onnx_bytes": onnx, "profile": "paddle-rec", "charset_text": chars, **bad})
+				check(label + " is refused", False)
+			except frappe.ValidationError:
+				check(label + " is refused", True)
+		check("a refused import leaves no model behind", not frappe.db.exists("OCR External Model", name))
+		r = service.external_add(name, onnx, "paddle-rec", chars, source="https://huggingface.co/PaddlePaddle/PP-OCRv6_small_rec_onnx", licence="apache-2.0", commercial_use="yes", note="selftest")
+		check("import: the model runs a blank cell and is registered", r["classes"] == 18710, r)
+		m = next(x for x in service.external_models() if x["name"] == name)
+		check("the list shows its licence, commercial use and that the file matches its hash", m["licence"] == "apache-2.0" and m["commercial_use"] == "yes" and m["ok"], m)
+		try:
+			service.external_add(name, onnx, "paddle-rec", chars)
+			check("a second import under the same name is refused", False)
+		except frappe.ValidationError:
+			check("a second import under the same name is refused", True)
+		try:
+			service.external_import_hf("a/b", name + "2", "m.onnx", "c.txt", "paddle-rec", accept_licence=0)
+			check("a Hugging Face import without the licence accepted is refused", False)
+		except frappe.ValidationError:
+			check("a Hugging Face import without the licence accepted is refused", True)
+		# a card with printed digits as labeled cells: the model reads them
+		import cv2
+
+		doc = frappe.get_doc({"doctype": "OCR Card Type", "card_key": card_key, "title": "Self test ext", "fields": [{"key": "weight", "kind": "number", "layout": "single", "decode": "greedy"}, {"key": "when", "kind": "date", "layout": "stacked", "decode": "greedy"}]}).insert()
+		scan = frappe.get_doc({"doctype": "OCR Scan", "card_type": card_key, "page": "selftest-ext", "status": "Cut", "inliers": 100}).insert()
+		for i, (text, field) in enumerate((("57.5", "weight"), ("62", "weight"), ("22/3/26", "when"))):
+			img = np.full((60, 220), 255, np.uint8)
+			cv2.putText(img, text, (8, 42), cv2.FONT_HERSHEY_SIMPLEX, 1.2, 0, 2, cv2.LINE_AA)
+			url = service._save_private(f"selftest-ext-{i}.png", cv2.imencode(".png", img)[1].tobytes())
+			frappe.get_doc({"doctype": "OCR Cell", "scan": scan.name, "card_type": card_key, "field_key": field, "visit": f"c{i + 1}", "has_ink": 1, "crop": url, "label": text, "how": "typed"}).insert()
+		res = service.external_benchmark(card_key, name)
+		check("benchmark: the two single-line cells are scored and read right, the two-line one is left out", res["cells"] == 2 and res["overall"]["correct"] == 2 and res["skipped"] == 1, res["overall"])
+		check("the score is kept on the model", next(x for x in service.external_models() if x["name"] == name)["benchmarks"][0]["card"] == card_key)
+		s = service.external_suggest(card_key, name)
+		cells = {c.field_key + c.visit: c for c in frappe.get_all("OCR Cell", filters={"card_type": card_key}, fields=["field_key", "visit", "ai_text", "ai_source", "label"])}
+		check("suggest: single-line cells get the model's read as a suggestion tagged with its name; labels untouched", s["read"] == 2 and cells["weightc1"].ai_text == "57.5" and cells["weightc1"].ai_source == f"external:{name}" and cells["weightc1"].label == "57.5" and not cells["whenc3"].ai_text, s)
+		service.external_remove(name)
+		check("remove: the model and its file are gone", not frappe.db.exists("OCR External Model", name) and not frappe.db.exists("File", {"file_name": f"external-{name}.onnx"}))
+	finally:
+		frappe.db.rollback()
+		for f in frappe.get_all("File", filters=[["file_name", "like", "selftest-ext-%"]], pluck="name") + frappe.get_all("File", filters=[["file_name", "like", "external-selftest_ext%"]], pluck="name"):
+			if frappe.db.exists("File", f):
+				frappe.delete_doc("File", f, ignore_permissions=True, force=True)
+		frappe.db.commit()
+	for label, ok, extra in report:
+		print(("PASS " if ok else "FAIL ") + label + (f"  ({extra})" if extra != "" else ""))
+	print("RESULT:", "all passed" if all(o for _, o, _ in report) else "FAILURES")

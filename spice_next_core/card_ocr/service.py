@@ -577,3 +577,171 @@ def delete_version(card_type, version):
 	lay = frappe.db.get_value("OCR Template Version", last.name, "layout_json")
 	frappe.db.set_value("OCR Card Type", card_type, "layout_json", json.dumps(_jload(lay)) if lay else None, update_modified=False)
 	return {"deleted_card_type": 0, "in_use": frappe.db.get_value("OCR Card Type", card_type, "template_version") or 0}
+
+
+# ---------------------------------------------------------------- pretrained models from outside (engine/extreader.py)
+EXTERNAL_MAX_BYTES = 400 * 1024 * 1024        # a recogniser a phone could run is far smaller than this
+_ext_readers = {}
+
+
+def external_models():
+	"""[{name, profile, classes, licence, commercial_use, source, note, ok, benchmarks: [{card, n, exact, cer, when}]}]"""
+	out = []
+	for m in frappe.get_all("OCR External Model", fields=["name", "profile", "licence", "commercial_use", "source", "note", "spec", "benchmarks", "sha256", "model_file"], order_by="name asc"):
+		spec = m.spec if isinstance(m.spec, dict) else json.loads(m.spec or "{}")
+		bm = m.benchmarks if isinstance(m.benchmarks, dict) else json.loads(m.benchmarks or "{}")
+		ok = bool(m.model_file) and _sha(_file_bytes(m.model_file)) == m.sha256
+		out.append({"name": m.name, "profile": m.profile, "classes": len(spec.get("classes", [])), "licence": m.licence, "commercial_use": m.commercial_use, "source": m.source, "note": m.note,
+			"ok": ok, "problem": "" if ok else "the model file is missing or does not match its hash", "benchmarks": [{"card": c, **{k: v[k] for k in ("n", "exact", "cer", "when")}} for c, v in bm.items()]})
+	return out
+
+
+def _sha(data):
+	import hashlib
+
+	return hashlib.sha256(data).hexdigest()
+
+
+def external_add(name, onnx_bytes, profile, charset_text, source="", licence="", commercial_use="unknown", note="", digit_map=0, **override):
+	"""Register a model: checks the name, builds the spec, runs a blank cell through the model (a wrong class count or channel count is refused), and stores the file privately."""
+	from spice_next_core.card_ocr.engine import extreader as X
+
+	if not X.NAME.match(name or ""):
+		frappe.throw(_("Model name: letters, digits, _ or - (at most 40)."))
+	if frappe.db.exists("OCR External Model", name):
+		frappe.throw(_("A model called {0} is already registered.").format(name))
+	if commercial_use not in ("unknown", "yes", "no"):
+		frappe.throw(_("Commercial use is unknown, yes or no."))
+	try:
+		spec = X.make_spec(profile, X.parse_charset(charset_text), digit_map=bool(int(digit_map or 0)), **override)
+		X.ExternalReader(onnx_bytes, spec).check()
+	except ValueError as e:
+		frappe.throw(str(e))
+	url = _save_private(f"external-{name}.onnx", onnx_bytes)
+	frappe.get_doc({"doctype": "OCR External Model", "model_key": name, "profile": profile, "model_file": url, "sha256": _sha(onnx_bytes), "source": source, "licence": licence or "not stated",
+		"commercial_use": commercial_use, "digit_map": 1 if spec["digit_map"] else 0, "charset": "\n".join(X.parse_charset(charset_text)),
+		"spec": json.dumps(spec), "note": note}).insert()
+	return {"name": name, "classes": len(spec["classes"])}
+
+
+def external_hf_info(repo):
+	"""What Hugging Face says about a public model repo before anything is downloaded. -> {repo, licence, gated, url, files}. Gated repos need a login: import those by uploading the files."""
+	import re
+
+	import requests
+
+	if not re.fullmatch(r"[\w.-]{1,96}/[\w.-]{1,96}", repo or ""):
+		frappe.throw(_("The repository looks like owner/name."))
+	r = requests.get(f"https://huggingface.co/api/models/{repo}", params={"blobs": "true"}, timeout=30)
+	if r.status_code != 200:
+		frappe.throw(_("Hugging Face does not show {0} publicly (status {1}). A private or gated repository has to be imported by uploading its files.").format(repo, r.status_code))
+	m = r.json()
+	lic = next((t.split(":", 1)[1] for t in m.get("tags", []) if t.startswith("license:")), "")
+	return {"repo": repo, "licence": lic, "gated": bool(m.get("gated")), "url": f"https://huggingface.co/{repo}",
+		"files": [{"name": s["rfilename"], "bytes": s.get("size") or 0} for s in m.get("siblings", []) if s["rfilename"].lower().endswith((".onnx", ".yml", ".yaml", ".json", ".txt"))]}
+
+
+def external_import_hf(repo, name, onnx_file, charset_file, profile, accept_licence=0, commercial_use="unknown", note="", digit_map=0):
+	"""Download the model and its characters file from a public Hugging Face repo and register them. The licence is read from the repo and recorded; accept_licence says a person saw it."""
+	import requests
+
+	if not int(accept_licence or 0):
+		frappe.throw(_("Show the licence to a person and accept it first."))
+	info = external_hf_info(repo)
+	size = {f["name"]: f["bytes"] for f in info["files"]}
+	for f in (onnx_file, charset_file):
+		if f not in size:
+			frappe.throw(_("{0} has no file {1}.").format(repo, f))
+	if size[onnx_file] > EXTERNAL_MAX_BYTES:
+		frappe.throw(_("{0} is {1} MB: too large for a phone-sized recogniser.").format(onnx_file, size[onnx_file] // 1048576))
+	get = lambda f: requests.get(f"https://huggingface.co/{repo}/resolve/main/{f}", timeout=300)          # noqa: E731
+	a, b = get(onnx_file), get(charset_file)
+	if a.status_code != 200 or b.status_code != 200:
+		frappe.throw(_("The download failed (status {0}/{1}).").format(a.status_code, b.status_code))
+	return external_add(name, a.content, profile, b.content.decode("utf-8"), info["url"], info["licence"], commercial_use, note, digit_map)
+
+
+def external_reader(name):
+	from spice_next_core.card_ocr.engine import extreader as X
+
+	m = frappe.get_doc("OCR External Model", name)
+	key = (name, m.sha256)
+	if key not in _ext_readers:
+		data = _file_bytes(m.model_file)
+		if _sha(data) != m.sha256:
+			frappe.throw(_("The file of {0} does not match its hash.").format(name))
+		_ext_readers[key] = X.ExternalReader(data, m.spec if isinstance(m.spec, dict) else json.loads(m.spec))
+	return _ext_readers[key]
+
+
+def _single_line_fields(card_type):
+	return {f.key for f in frappe.get_doc("OCR Card Type", card_type).fields if (f.layout or "single") == "single" and f.kind != "text"}
+
+
+def external_benchmark(card_type, name):
+	"""Read every labeled single-line cell of a card with the model, no fine-tuning, and score the reads against the labels people gave. -> {cells, overall, by_field, skipped}"""
+	import numpy as np
+
+	from spice_next_core.card_ocr.engine import extreader as X
+
+	rd = external_reader(name)
+	keep = _single_line_fields(card_type)
+	cells = frappe.get_all("OCR Cell", filters={"card_type": card_type, "label": ["is", "set"], "crop": ["is", "set"]}, fields=["field_key", "label", "crop"])
+	use = [c for c in cells if c.field_key in keep]
+	if not use:
+		frappe.throw(_("{0} has no labeled single-line cells to score.").format(card_type))
+	rows = []
+	for c in use:
+		img = cv2.imdecode(np.frombuffer(_file_bytes(c.crop), np.uint8), cv2.IMREAD_GRAYSCALE)
+		if img is not None:
+			rows.append((c.field_key, c.label.strip(), rd.read(img)[0]))
+	res = {**X.score(rows), "cells": len(rows), "skipped": len(cells) - len(use), "when": frappe.utils.now()[:16]}
+	doc = frappe.get_doc("OCR External Model", name)
+	bm = doc.benchmarks if isinstance(doc.benchmarks, dict) else json.loads(doc.benchmarks or "{}")
+	bm[card_type] = {"n": res["overall"]["n"], "exact": res["overall"]["exact"], "cer": res["overall"]["cer"], "when": res["when"]}
+	frappe.db.set_value("OCR External Model", name, "benchmarks", json.dumps(bm), update_modified=False)
+	return res
+
+
+def external_suggest(card_type, name, redo=0, limit=2000):
+	"""Put the model's reads beside every cell with ink that has no suggestion yet (or all, with redo): ai_text, ai_confidence, ai_source `external:<name>`. Never a label."""
+	import numpy as np
+
+	rd = external_reader(name)
+	keep = _single_line_fields(card_type)
+	filters = {"card_type": card_type, "has_ink": 1, "crop": ["is", "set"]}
+	if not int(redo):
+		filters["ai_text"] = ["is", "not set"]
+	read = 0
+	for c in frappe.get_all("OCR Cell", filters=filters, fields=["name", "field_key", "crop"], limit=int(limit)):
+		if c.field_key not in keep:
+			continue
+		img = cv2.imdecode(np.frombuffer(_file_bytes(c.crop), np.uint8), cv2.IMREAD_GRAYSCALE)
+		if img is None:
+			continue
+		text, conf = rd.read(img)
+		frappe.db.set_value("OCR Cell", c.name, {"ai_text": text, "ai_confidence": conf, "ai_source": f"external:{name}"}, update_modified=False)
+		read += 1
+	return {"read": read, "source": f"external:{name}"}
+
+
+def external_remove(name):
+	"""Remove a model and its stored file. Suggestions it already wrote stay (they say where they came from)."""
+	doc = frappe.get_doc("OCR External Model", name)
+	url = doc.model_file
+	frappe.delete_doc("OCR External Model", name)
+	if url and (fn := frappe.db.get_value("File", {"file_url": url})):
+		frappe.delete_doc("File", fn, ignore_permissions=True, force=True)
+	_ext_readers.clear()
+
+
+def external_import_files(name, onnx_url, charset_url, profile, source="", licence="", commercial_use="unknown", note="", digit_map=0):
+	"""Register a model from two files already uploaded to Frappe (for a gated or private repo, or a model that did not come from Hugging Face). The uploads are deleted after."""
+	onnx, chars = _file_bytes(onnx_url), _file_bytes(charset_url)
+	if len(onnx) > EXTERNAL_MAX_BYTES:
+		frappe.throw(_("The model file is {0} MB: too large for a phone-sized recogniser.").format(len(onnx) // 1048576))
+	res = external_add(name, onnx, profile, chars.decode("utf-8"), source, licence, commercial_use, note, digit_map)
+	for u in (onnx_url, charset_url):
+		if fn := frappe.db.get_value("File", {"file_url": u}):
+			frappe.delete_doc("File", fn, ignore_permissions=True, force=True)
+	return res

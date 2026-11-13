@@ -74,6 +74,7 @@ class OcrTraining {
 		this.$runs = $(`<div class="cs-panel"></div>`).appendTo(this.$body);
 		this.$result = $(`<div class="cs-panel" style="display:none"></div>`).appendTo(this.$body);
 		this.$size = $(`<div class="cs-panel"></div>`).appendTo(this.$body);
+		this.$ext = $(`<div class="cs-panel"></div>`).appendTo(this.$body);
 		this.init();
 	}
 
@@ -85,6 +86,96 @@ class OcrTraining {
 		if (cards.length) this.card_field.set_value(cards[0].name);
 		this.check_health();
 		this.load_weights();
+		this.load_external();
+	}
+
+	// ---------------------------------------------------------------- pretrained models from outside
+	async load_external() {
+		const E = frappe.utils.escape_html, card = this.card_field.get_value() || "";
+		const r = (await frappe.call({ method: API + "external_models", type: "GET" })).message;
+		this.ext_profiles = r.profiles;
+		const rows = r.models.map((m) => {
+			const bm = m.benchmarks.map((b) => `<div class="cs-muted">${E(b.card)}: ${Math.round(b.exact * 100)}% ${__("exact")}, CER ${b.cer} ${__("on")} ${b.n} ${__("cells")}</div>`).join("") || `<div class="cs-muted">${__("not scored yet")}</div>`;
+			const lic = `${E(m.licence || __("licence not stated"))} · ${m.commercial_use === "yes" ? __("commercial use ok") : m.commercial_use === "no" ? `<b style="color:var(--red-600)">${__("no commercial use")}</b>` : __("commercial use unknown")}`;
+			return `<tr data-n="${E(m.name)}"><td><b>${E(m.name)}</b><div class="cs-muted">${E(m.profile)} · ${m.classes.toLocaleString()} ${__("characters")}</div>${m.ok ? "" : `<div class="cs-pill bad">${E(m.problem)}</div>`}</td>
+				<td>${lic}<div class="cs-muted">${m.source ? `<a href="${E(m.source)}" target="_blank" rel="noopener">${__("source")}</a> · ` : ""}${E(m.note || "")}</div></td><td>${bm}</td>
+				<td style="white-space:nowrap"><button class="btn btn-default btn-xs x-bench">${__("Score on {0}", [E(card)])}</button> <button class="btn btn-default btn-xs x-sug" title="${__("Writes this model's reads beside the cells as suggestions. A person still decides every label.")}">${__("Suggest labels")}</button> <button class="btn btn-default btn-xs text-danger x-del">${__("Remove")}</button></td></tr>`;
+		}).join("");
+		this.$ext.html(`<div class="cs-h">${__("Pretrained models from outside")} <small>${__("recognisers made elsewhere: score them on a card's labels, or let one suggest labels. They cannot start a training run: that needs weights in our own network's shape.")}</small></div>
+			${rows ? `<table class="cs-table"><tr><th>${__("Model")}</th><th>${__("Licence")}</th><th>${__("Results")}</th><th></th></tr>${rows}</table>` : `<div class="cs-muted" style="margin:8px 0">${__("None imported yet.")}</div>`}
+			<div id="extmsg" class="cs-muted"></div>
+			<div class="cs-h" style="margin-top:14px">${__("Import from Hugging Face")}</div>
+			<div class="cs-actions" style="align-items:end"><label>${__("Repository")} <input id="hfrepo" class="form-control input-sm" style="width:340px" placeholder="PaddlePaddle/PP-OCRv6_small_rec_onnx"></label><button class="btn btn-default btn-sm x-look">${__("Look up")}</button>
+				<button class="btn btn-default btn-sm x-up">${__("Or upload the files")}</button></div><div id="hfinfo"></div>`);
+		const $t = this.$ext;
+		$t.find(".x-look").on("click", () => this.ext_lookup());
+		$t.find(".x-up").on("click", () => this.ext_upload_dialog());
+		$t.find(".x-bench").on("click", (ev) => this.ext_run("external_benchmark", $(ev.currentTarget).closest("tr").data("n")));
+		$t.find(".x-sug").on("click", (ev) => this.ext_run("external_suggest", $(ev.currentTarget).closest("tr").data("n")));
+		$t.find(".x-del").on("click", (ev) => { const n = $(ev.currentTarget).closest("tr").data("n"); frappe.confirm(__("Remove {0} and its scores? Suggestions it already wrote stay.", [n]), async () => { await frappe.call({ method: API + "external_remove", type: "POST", args: { name: n } }); this.load_external(); }); });
+	}
+
+	async ext_run(method, name) {
+		const card = this.card_field.get_value(), E = frappe.utils.escape_html;
+		if (!card) return;
+		this.$ext.find("#extmsg").text(__("Reading with {0}...", [name]));
+		try {
+			const r = (await frappe.call({ method: API + method, type: "POST", args: { card_type: card, name } })).message;
+			await this.load_external();
+			this.$ext.find("#extmsg").html(method === "external_benchmark" ? `<span class="cs-pill ok">${r.cells} ${__("cells scored")}</span> ${Math.round(r.overall.exact * 100)}% ${__("exact")}${r.skipped ? ` · ${r.skipped} ${__("two-line or free-text cells not read")}` : ""}`
+				: `<span class="cs-pill ok">${r.read} ${__("suggestions written")}</span> ${__("open Labeling to see them")}`);
+		} catch (e) { this.$ext.find("#extmsg").html(`<span class="cs-pill bad">${E((e && e.message) || __("failed"))}</span>`); }
+	}
+
+	async ext_lookup() {
+		const E = frappe.utils.escape_html, $o = this.$ext.find("#hfinfo").text(__("Looking up..."));
+		try {
+			const i = (await frappe.call({ method: API + "external_hf_info", type: "GET", args: { repo: this.$ext.find("#hfrepo").val().trim() } })).message;
+			this.hf = i;
+			const opt = (re) => i.files.filter((f) => re.test(f.name)).map((f) => `<option value="${E(f.name)}">${E(f.name)} (${(f.bytes / 1048576).toFixed(1)} MB)</option>`).join("");
+			$o.html(`<div class="cs-panel" style="margin-top:8px"><b>${E(i.repo)}</b> · ${__("licence")}: <b>${E(i.licence || __("not stated"))}</b>${i.gated ? ` · <b>${__("gated: import it by uploading its files")}</b>` : ""} <a href="${E(i.url)}" target="_blank" rel="noopener">${__("read the model card")}</a></div>
+				<div class="cs-actions" style="align-items:end"><label>${__("Model file")} <select id="hfonnx" class="form-control input-sm">${opt(/\.onnx$/i)}</select></label><label>${__("Characters file")} <select id="hfchars" class="form-control input-sm">${opt(/\.(ya?ml|json|txt)$/i)}</select></label>
+					<label>${__("Type")} <select id="hfprof" class="form-control input-sm">${Object.entries(this.ext_profiles).map(([k, v]) => `<option value="${k}">${E(v)}</option>`).join("")}</select></label>
+					<label>${__("Name")} <input id="hfname" class="form-control input-sm" value="${E(i.repo.split("/")[1].toLowerCase().replace(/[^a-z0-9_-]/g, "_").slice(0, 40))}"></label>
+					<label>${__("Commercial use")} <select id="hfcom" class="form-control input-sm"><option value="unknown">${__("unknown")}</option><option value="yes">${__("allowed")}</option><option value="no">${__("not allowed")}</option></select></label>
+					<label>${__("Digits")} <select id="hfdig" class="form-control input-sm"><option value="0">${__("as the model writes them")}</option><option value="1">${__("map Bengali digits to 0-9")}</option></select></label></div>
+				<div class="cs-actions"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="hfok"> ${__("I have read the licence above and it allows this use here")}</label><button class="btn btn-primary btn-sm x-imp" ${i.gated ? "disabled" : ""}>${__("Download and import")}</button></div>`);
+			$o.find(".x-imp").on("click", () => this.ext_import());
+		} catch (e) { $o.html(`<span class="cs-pill bad">${E((e && e.message) || "")}</span>`); }
+	}
+
+	async ext_import() {
+		const $t = this.$ext;
+		if (!$t.find("#hfok").is(":checked")) { frappe.show_alert({ message: __("Tick the licence box first."), indicator: "red" }); return; }
+		$t.find("#extmsg").text(__("Downloading and checking the model..."));
+		try {
+			await frappe.call({ method: API + "external_import_hf", type: "POST", freeze: true, freeze_message: __("Downloading..."), args: { repo: this.hf.repo, name: $t.find("#hfname").val().trim(), onnx_file: $t.find("#hfonnx").val(),
+				charset_file: $t.find("#hfchars").val(), profile: $t.find("#hfprof").val(), accept_licence: 1, commercial_use: $t.find("#hfcom").val(), digit_map: $t.find("#hfdig").val() } });
+			await this.load_external();
+			this.$ext.find("#extmsg").html(`<span class="cs-pill ok">${__("imported")}</span>`);
+		} catch (e) { $t.find("#extmsg").html(`<span class="cs-pill bad">${frappe.utils.escape_html((e && e.message) || __("failed"))}</span>`); }
+	}
+
+	ext_upload_dialog() {
+		const d = new frappe.ui.Dialog({
+			title: __("Import a model from files"), fields: [
+				{ fieldname: "name", fieldtype: "Data", label: __("Name"), reqd: 1 },
+				{ fieldname: "profile", fieldtype: "Select", label: __("Type"), options: Object.keys(this.ext_profiles).join("\n"), default: "paddle-rec", reqd: 1 },
+				{ fieldname: "onnx", fieldtype: "Attach", label: __("Model file (.onnx)"), reqd: 1 },
+				{ fieldname: "chars", fieldtype: "Attach", label: __("Characters file (.yml, .json or .txt)"), reqd: 1 },
+				{ fieldname: "source", fieldtype: "Data", label: __("Source (a link)") },
+				{ fieldname: "licence", fieldtype: "Data", label: __("Licence"), reqd: 1 },
+				{ fieldname: "commercial", fieldtype: "Select", label: __("Commercial use"), options: "unknown\nyes\nno", default: "unknown" },
+				{ fieldname: "digits", fieldtype: "Check", label: __("Map Bengali digits to 0-9") },
+				{ fieldname: "ok", fieldtype: "Check", label: __("The licence allows this use here"), reqd: 1 }],
+			primary_action_label: __("Import"), primary_action: async (v) => {
+				try {
+					await frappe.call({ method: API + "external_import_files", type: "POST", freeze: true, args: { name: v.name, onnx_url: v.onnx, charset_url: v.chars, profile: v.profile, source: v.source || "", licence: v.licence, commercial_use: v.commercial, digit_map: v.digits ? 1 : 0 } });
+					d.hide(); this.load_external();
+				} catch (_) { /* the server says why */ }
+			},
+		});
+		d.show();
 	}
 
 	async load_weights() {
@@ -130,6 +221,7 @@ class OcrTraining {
 			<div class="text-muted" style="margin-top:4px">${__("Training needs several people-checked pages. A reader trained on machine reads is scored against the same guesses, so its accuracy would mean little.")}</div>`);
 		this.load_runs();
 		this.load_size();
+		this.load_external();
 	}
 
 	async load_runs() {

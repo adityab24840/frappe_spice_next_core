@@ -305,3 +305,67 @@ def delete_template_version(card_type, version):
 	from spice_next_core.card_ocr import service
 
 	return service.delete_version(card_type, version)
+
+
+@frappe.whitelist(methods=["GET"])
+def external_models():
+	"""Pretrained models from outside that have been imported. See service.external_models."""
+	_need_role()
+	from spice_next_core.card_ocr import service
+	from spice_next_core.card_ocr.engine import extreader
+
+	return {"models": service.external_models(), "profiles": {k: v["label"] for k, v in extreader.PROFILES.items()}}
+
+
+@frappe.whitelist(methods=["GET"])
+def external_hf_info(repo):
+	"""Licence, gating and files of a public Hugging Face model repo, before anything is downloaded."""
+	_need_role()
+	from spice_next_core.card_ocr import service
+
+	return service.external_hf_info(repo)
+
+
+@frappe.whitelist(methods=["POST"])
+def external_import_hf(repo, name, onnx_file, charset_file, profile, accept_licence=0, commercial_use="unknown", note="", digit_map=0):
+	"""Download a model from a public Hugging Face repo and register it. See service.external_import_hf."""
+	_need_role()
+	from spice_next_core.card_ocr import service
+
+	return service.external_import_hf(repo, name, onnx_file, charset_file, profile, accept_licence, commercial_use, note, digit_map)
+
+
+@frappe.whitelist(methods=["POST"])
+def external_import_files(name, onnx_url, charset_url, profile, source="", licence="", commercial_use="unknown", note="", digit_map=0):
+	"""Register a model from two uploaded files. See service.external_import_files."""
+	_need_role()
+	from spice_next_core.card_ocr import service
+
+	return service.external_import_files(name, onnx_url, charset_url, profile, source, licence, commercial_use, note, digit_map)
+
+
+@frappe.whitelist(methods=["POST"])
+def external_benchmark(card_type, name):
+	"""Score a model on a card's labeled single-line cells. See service.external_benchmark."""
+	_need_role()
+	from spice_next_core.card_ocr import service
+
+	return service.external_benchmark(card_type, name)
+
+
+@frappe.whitelist(methods=["POST"])
+def external_suggest(card_type, name, redo=0):
+	"""Put a model's reads beside a card's cells as suggestions. See service.external_suggest."""
+	_need_role()
+	from spice_next_core.card_ocr import service
+
+	return service.external_suggest(card_type, name, redo)
+
+
+@frappe.whitelist(methods=["POST"])
+def external_remove(name):
+	"""Remove an imported model."""
+	_need_role()
+	from spice_next_core.card_ocr import service
+
+	return service.external_remove(name)
